@@ -88,4 +88,7 @@ def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
             # A failed LLM/data call never produces a decision or a simulated fill.
             output.append({"ticker": ticker, "status": "FAILED", "error": f"{type(exc).__name__}: {exc}"})
     db.close()
+    if output and all(item["status"] != "FAILED" for item in output):
+        from .signal_feed import export_feed
+        export_feed(data_dir, day, symbols)
     return output

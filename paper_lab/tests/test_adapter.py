@@ -31,16 +31,18 @@ class GraphContractTests(unittest.TestCase):
 
             def save_reports(self, state, ticker, path):
                 path.mkdir(parents=True)
-                (path / "summary.md").write_text(state["market_report"])
-                return path
+                (path / "complete_report.md").write_text(state["market_report"])
+                return path / "complete_report.md"
 
         self_test = self
         with tempfile.TemporaryDirectory() as folder:
-            with patch("tradingagents.graph.trading_graph.TradingAgentsGraph", FakeGraph):
+            with patch("tradingagents.graph.trading_graph.TradingAgentsGraph", FakeGraph), \
+                 patch("ta_paper_lab.agents.iso_utc", return_value="2026-09-24T21:00:00Z"):
                 rows = analyze(Path(folder), ["SPY"], "2026-09-24")
             self.assertEqual(rows[0]["status"], "RECORDED")
             self.assertEqual(rows[0]["rating"], "Buy")
-            self.assertTrue((Path(rows[0]["report"]) / "summary.md").exists())
+            self.assertTrue(Path(rows[0]["report"]).is_file())
+            self.assertTrue((Path(folder) / "signal_feed" / "2026-09-24.json").exists())
             db = connect(Path(folder) / "paper.db")
             try:
                 self.assertEqual(status(db)["decisions"][0]["status"], "PENDING")

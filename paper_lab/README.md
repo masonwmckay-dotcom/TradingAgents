@@ -10,6 +10,12 @@ A separate research bot built around [TauricResearch/TradingAgents](https://gith
 
 The order of operations for a daily run is: collect today's completed bars → settle prior decisions in the paper ledger → run today's research for tomorrow's simulation. The first day therefore has research but no fills.
 
+## Decision feed for review
+
+When **all** requested tickers finish real analysis, the lab also writes one immutable metadata file at `data/signal_feed/YYYY-MM-DD.json` (or `/data/signal_feed/` on Railway). It contains each ticker's dated final rating, trader action, stop, decision timestamp and payload hash; no analyst prose, API key or broker order. Failed or incomplete runs produce no new feed. Re-running the same decisions accepts identical bytes and refuses a changed dated file. The synthetic `demo` cannot export a feed.
+
+This is a local review artifact. Its SHA-256 detects modification but does not authenticate who sent it. The existing Alpaca bot has a **different Railway project and volume**, so it cannot read this path directly. Review the separate Alpaca preview importer and choose a private authenticated transfer before connecting the deployments. No broker submit function is added here, and this file is not an approved order.
+
 ## Set up
 
 Requires Python 3.12 or later, `git`, network access for the market/LLM services, and a paid or otherwise usable **OpenAI API** key. A ChatGPT subscription by itself is not that API key.

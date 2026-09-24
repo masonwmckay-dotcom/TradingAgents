@@ -26,6 +26,24 @@ class ConnectionDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("secret", str(chain))
 
 
+    def test_invalid_header_category_redacts_value(self):
+        from ta_paper_lab.agents import _safe_cause_chain
+
+        class LocalProtocolError(Exception):
+            pass
+
+        try:
+            try:
+                raise LocalProtocolError("Illegal header value b'Bearer secret-value'")
+            except LocalProtocolError as root:
+                raise ConnectionError("connection failed") from root
+        except ConnectionError as outer:
+            chain = _safe_cause_chain(outer)
+        self.assertEqual(chain, [{"type": "LocalProtocolError",
+                                  "category": "invalid_http_header_value"}])
+        self.assertNotIn("secret-value", str(chain))
+
+
 @unittest.skipUnless(importlib.util.find_spec("tradingagents"), "install pinned TradingAgents dependency")
 class GraphContractTests(unittest.TestCase):
     @patch.dict(os.environ, {"OPENAI_API_KEY": "fake-test-value", "ALPHAVANTAGE_API_KEY": "fake-test-value"})

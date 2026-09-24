@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ta-paper-lab"
+version = "0.1.0"
+description = "Isolated TradingAgents research and paper simulation"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+agents = ["tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@35543d0248bf89fcb92b17a15858ad0c0e940687"]
+
+[project.scripts]
+ta-paper = "ta_paper_lab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ta_paper_lab*"]

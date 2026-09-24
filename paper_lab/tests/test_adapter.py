@@ -11,6 +11,21 @@ from ta_paper_lab.agents import analyze
 from ta_paper_lab.core import connect, status
 
 
+class ConnectionDiagnosticsTests(unittest.TestCase):
+    def test_cause_chain_omits_exception_messages(self):
+        from ta_paper_lab.agents import _safe_cause_chain
+
+        try:
+            try:
+                raise OSError(101, "secret-value-must-not-appear")
+            except OSError as root:
+                raise ConnectionError("another-secret") from root
+        except ConnectionError as outer:
+            chain = _safe_cause_chain(outer)
+        self.assertEqual(chain, [{"type": "OSError", "errno": 101}])
+        self.assertNotIn("secret", str(chain))
+
+
 @unittest.skipUnless(importlib.util.find_spec("tradingagents"), "install pinned TradingAgents dependency")
 class GraphContractTests(unittest.TestCase):
     @patch.dict(os.environ, {"OPENAI_API_KEY": "fake-test-value", "ALPHAVANTAGE_API_KEY": "fake-test-value"})

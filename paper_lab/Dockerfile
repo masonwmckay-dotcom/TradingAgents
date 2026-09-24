@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY ta_paper_lab ./ta_paper_lab
-RUN python -m pip install --no-cache-dir '.[agents]'
+RUN python -m pip install --no-cache-dir '.[agents,bridge]'
 
 ENV PYTHONUNBUFFERED=1 TA_PAPER_DATA_DIR=/data
 CMD ["python", "-m", "ta_paper_lab.scheduler"]

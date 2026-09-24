@@ -14,7 +14,9 @@ The order of operations for a daily run is: collect today's completed bars → s
 
 When **all** requested tickers finish real analysis, the lab also writes one immutable metadata file at `data/signal_feed/YYYY-MM-DD.json` (or `/data/signal_feed/` on Railway). It contains each ticker's dated final rating, trader action, stop, decision timestamp and payload hash; no analyst prose, API key or broker order. Failed or incomplete runs produce no new feed. Re-running the same decisions accepts identical bytes and refuses a changed dated file. The synthetic `demo` cannot export a feed.
 
-This is a local review artifact. Its SHA-256 detects modification but does not authenticate who sent it. The existing Alpaca bot has a **different Railway project and volume**, so it cannot read this path directly. Review the separate Alpaca preview importer and choose a private authenticated transfer before connecting the deployments. No broker submit function is added here, and this file is not an approved order.
+This is a review artifact. Its SHA-256 detects modification but does not authenticate who sent it. The existing Alpaca bot has a **different Railway project and volume**, so it cannot read this path directly. The optional S3 bridge publishes the file as `tradingagents/v1/YYYY-MM-DD.json` in a private Railway bucket. It uses a conditional first write and byte-for-byte verification, and refuses to replace a changed dated object. No broker submit function is added here, and this file is not an approved order.
+
+The S3 bridge activates only when all four variables are present: `TA_SIGNAL_S3_BUCKET`, `TA_SIGNAL_S3_ENDPOINT` (HTTPS base endpoint), `TA_SIGNAL_S3_ACCESS_KEY_ID`, and `TA_SIGNAL_S3_SECRET_ACCESS_KEY`. `TA_SIGNAL_S3_REGION` defaults to `auto`. An incomplete configuration fails the research run after the local decision is saved, so the same immutable decision can be retried. Enter secrets as Railway service variables, not in GitHub. The current deployed service has none of these variables; this draft does not publish to a bucket until reviewed and configured.
 
 ## Set up
 

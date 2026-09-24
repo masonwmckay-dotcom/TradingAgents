@@ -11,6 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 agents = ["tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@35543d0248bf89fcb92b17a15858ad0c0e940687"]
+bridge = ["boto3>=1.34,<2"]
 
 [project.scripts]
 ta-paper = "ta_paper_lab.cli:main"

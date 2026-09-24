@@ -90,5 +90,6 @@ def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
     db.close()
     if output and all(item["status"] != "FAILED" for item in output):
         from .signal_feed import export_feed
-        export_feed(data_dir, day, symbols)
+        from .signal_bucket import publish_if_configured
+        publish_if_configured(export_feed(data_dir, day, symbols))
     return output

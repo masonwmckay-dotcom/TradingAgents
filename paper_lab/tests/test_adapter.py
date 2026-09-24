@@ -26,6 +26,17 @@ class ConnectionDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("secret", str(chain))
 
 
+    def test_key_normalization_and_internal_line_break(self):
+        from ta_paper_lab.agents import _normalize_openai_key
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "  fake-test-key\\n"}):
+            _normalize_openai_key()
+            self.assertEqual(os.environ["OPENAI_API_KEY"], "fake-test-key")
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "fake\\nother"}):
+            with self.assertRaisesRegex(RuntimeError, "internal line break"):
+                _normalize_openai_key()
+
+
     def test_invalid_header_category_redacts_value(self):
         from ta_paper_lab.agents import _safe_cause_chain
 

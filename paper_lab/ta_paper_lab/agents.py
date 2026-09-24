@@ -49,11 +49,23 @@ def _safe_cause_chain(exc: BaseException) -> list[dict]:
     return causes
 
 
+
+def _normalize_openai_key() -> None:
+    """Remove accidental surrounding whitespace without revealing credential data."""
+    key = os.environ.get("OPENAI_API_KEY", "")
+    cleaned = key.strip()
+    if not cleaned:
+        raise RuntimeError("OPENAI_API_KEY is required for actual TradingAgents research")
+    if any(char in cleaned for char in "\r\n"):
+        raise RuntimeError("OPENAI_API_KEY contains an internal line break; re-enter it as one line in Railway")
+    if cleaned != key:
+        os.environ["OPENAI_API_KEY"] = cleaned
+
+
 def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
     """Research only. Imports no Alpaca client and has no submit operation."""
     after_close(day)
-    if not os.environ.get("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is required for actual TradingAgents research")
+    _normalize_openai_key()
     try:
         installed = version("tradingagents")
     except PackageNotFoundError as exc:

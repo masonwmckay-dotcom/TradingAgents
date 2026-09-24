@@ -34,6 +34,16 @@ def _safe_cause_chain(exc: BaseException) -> list[dict]:
         verify_code = getattr(current, "verify_code", None)
         if isinstance(verify_code, int):
             detail["verify_code"] = verify_code
+        if type(current).__name__ == "LocalProtocolError":
+            reason = str(current)
+            if "Illegal header value" in reason or "Invalid header value" in reason:
+                detail["category"] = "invalid_http_header_value"
+            elif "Illegal header name" in reason or "Invalid header name" in reason:
+                detail["category"] = "invalid_http_header_name"
+            elif "Content-Length" in reason:
+                detail["category"] = "content_length_mismatch"
+            else:
+                detail["category"] = "other_local_protocol_error"
         causes.append(detail)
         current = current.__cause__ or current.__context__
     return causes

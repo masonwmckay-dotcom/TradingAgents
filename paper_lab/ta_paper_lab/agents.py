@@ -20,6 +20,25 @@ def after_close(day: str, now: datetime | None = None) -> None:
         raise ValueError("today is a weekend; no completed regular stock session")
 
 
+
+def _safe_cause_chain(exc: BaseException) -> list[dict]:
+    """Report exception classes and numeric OS codes without logging URLs or secrets."""
+    causes = []
+    seen = {id(exc)}
+    current = exc.__cause__ or exc.__context__
+    while current is not None and id(current) not in seen and len(causes) < 6:
+        seen.add(id(current))
+        detail = {"type": type(current).__name__}
+        if isinstance(current, OSError) and isinstance(current.errno, int):
+            detail["errno"] = current.errno
+        verify_code = getattr(current, "verify_code", None)
+        if isinstance(verify_code, int):
+            detail["verify_code"] = verify_code
+        causes.append(detail)
+        current = current.__cause__ or current.__context__
+    return causes
+
+
 def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
     """Research only. Imports no Alpaca client and has no submit operation."""
     after_close(day)
@@ -86,6 +105,7 @@ def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
                            "report": report_path})
         except Exception as exc:
             # A failed LLM/data call never produces a decision or a simulated fill.
-            output.append({"ticker": ticker, "status": "FAILED", "error": f"{type(exc).__name__}: {exc}"})
+            output.append({"ticker": ticker, "status": "FAILED", "error": f"{type(exc).__name__}: {exc}",
+                           "causes": _safe_cause_chain(exc)})
     db.close()
     return output

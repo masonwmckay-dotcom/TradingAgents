@@ -210,6 +210,10 @@ def load_ohlcv(symbol: str, curr_date: str, fill_gaps: bool = True) -> pd.DataFr
 
     config = get_config()
     curr_date_dt = pd.to_datetime(curr_date).normalize()
+    # The isolated paper lab compares the analyst close to its raw, immutable
+    # OHLC bar. Keep that mode in a different cache from adjusted-price runs.
+    raw_mode = config.get("paper_lab_raw_daily_ohlc", False) is True
+    strict_close = config.get("paper_lab_require_analysis_day_close", False) is True
 
     # One cache file per symbol, holding the latest 5y-to-today download.
     now = pd.Timestamp.today()
@@ -223,7 +227,7 @@ def load_ohlcv(symbol: str, curr_date: str, fill_gaps: bool = True) -> pd.DataFr
     os.makedirs(config["data_cache_dir"], exist_ok=True)
     data_file = os.path.join(
         config["data_cache_dir"],
-        f"{safe_symbol}-YFin-data.csv",
+        f"{safe_symbol}-YFin-{'raw-' if raw_mode else ''}data.csv",
     )
 
     # A cached file may be empty if a prior fetch failed (unknown symbol,
@@ -237,7 +241,13 @@ def load_ohlcv(symbol: str, curr_date: str, fill_gaps: bool = True) -> pd.DataFr
             and "Close" in cached.columns
             and _cache_is_fresh(data_file, curr_date_dt, now)
         ):
-            data = cached
+            if strict_close:
+                dates = _normalize_dates(_ensure_date_column(cached)["Date"])
+                matches = cached.loc[dates == curr_date_dt, "Close"]
+                if len(matches) == 1 and pd.notna(pd.to_numeric(matches.iloc[0], errors="coerce")):
+                    data = cached
+            else:
+                data = cached
 
     if data is None:
         downloaded = yf_retry(lambda: yf.download(
@@ -246,7 +256,7 @@ def load_ohlcv(symbol: str, curr_date: str, fill_gaps: bool = True) -> pd.DataFr
             end=end_str,
             multi_level_index=False,
             progress=False,
-            auto_adjust=True,
+            auto_adjust=not raw_mode,
         ))
         downloaded = _ensure_date_column(downloaded.reset_index())
         # Only cache real data — never persist an empty frame.
@@ -259,6 +269,14 @@ def load_ohlcv(symbol: str, curr_date: str, fill_gaps: bool = True) -> pd.DataFr
 
     # Filter to curr_date to prevent look-ahead bias in backtesting.
     data = data[data["Date"] <= curr_date_dt]
+
+    if strict_close:
+        today_row = data[data["Date"] == curr_date_dt]
+        if len(today_row) != 1 or pd.isna(today_row["Close"].iloc[0]):
+            raise NoMarketDataError(
+                symbol, canonical,
+                f"verified closing price unavailable for requested analysis date {curr_date}",
+            )
 
     # A closeless newest bar is an unsettled session, not a symbol without data.
     # _fill_price_gaps below drops it, here and mid-series alike, so the frame
@@ -286,5 +304,3 @@ def load_ohlcv(symbol: str, curr_date: str, fill_gaps: bool = True) -> pd.DataFr
     _assert_ohlcv_not_stale(data, curr_date, symbol, canonical)
 
     return data
-
-

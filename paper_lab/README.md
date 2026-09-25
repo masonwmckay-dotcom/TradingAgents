@@ -1,8 +1,16 @@
 # TradingAgents paper lab
 
-A separate research bot built around [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) v0.5.1, pinned to commit `35543d0248bf89fcb92b17a15858ad0c0e940687` (September 24, 2026). This project does **not** alter `masonwmckay-dotcom/alpaca-stock-agent` or use its Alpaca credentials. TradingAgents is a Python multi-agent research framework; the linked repository is not a TradingView Pine script.
+A separate research bot built around [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) v0.5.1, with the paper-lab Yahoo adapter pinned to [fork commit 57fda7f](https://github.com/masonwmckay-dotcom/TradingAgents/commit/57fda7f0943218ce36fdadffcc305bbe71c5797b) (September 25, 2026). This project does **not** alter `masonwmckay-dotcom/alpaca-stock-agent` or use its Alpaca credentials. TradingAgents is a Python multi-agent research framework; the linked repository is not a TradingView Pine script.
 
 ## What it does
+
+For same-day ETF research, the pinned fork uses raw Yahoo daily OHLC in both
+the analyst tools and this lab's saved bar file. Before any LLM call, it checks
+that the analyst's requested-day open, high, low and close exactly match the
+immutable `bars/YYYY-MM-DD.csv`. A missing close or disagreement records a
+failed ticker and cannot create a new paper decision. Raw and adjusted Yahoo
+downloads use separate caches. Historical decisions and reports are immutable:
+the September 24 reports are not retroactively corrected by this change.
 
 1. After 4:15 p.m. New York time, run TradingAgents' **market, fundamentals, and news** analysts, trader, and portfolio manager for each selected US ticker. Save its complete report under `data/upstream_reports` and one immutable dated decision in `data/paper.db`.
 2. Fetch the day's raw daily OHLC prices with `yfinance`, or supply the same CSV format yourself. Each bar records the provider name and when it was observed.

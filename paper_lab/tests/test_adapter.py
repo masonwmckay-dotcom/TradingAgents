@@ -4,14 +4,31 @@ import importlib.util
 import os
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from ta_paper_lab.agents import analyze
+import pandas as pd
+
+from ta_paper_lab.agents import _verify_analyst_prices, analyze
 from ta_paper_lab.core import connect, status
 
 
 class ConnectionDiagnosticsTests(unittest.TestCase):
+    def test_analyst_raw_bar_must_match_saved_ohlc(self):
+        expected = SimpleNamespace(open=Decimal("99.00"), high=Decimal("102.00"),
+                                   low=Decimal("98.00"), close=Decimal("101.00"))
+        prices = pd.DataFrame([{"Date":pd.Timestamp("2026-09-24"), "Open":99.0,
+                                "High":102.0, "Low":98.0, "Close":101.0}])
+        with patch("ta_paper_lab.agents.load_bars", return_value=("2026-09-24", {"SPY":expected}, "hash")), \
+             patch("tradingagents.dataflows.vendors.yahoo.ohlcv.load_ohlcv", return_value=prices):
+            _verify_analyst_prices(Path("/unused"), "SPY", "2026-09-24", {})
+            bad = prices.assign(Close=100.0)
+            with patch("tradingagents.dataflows.vendors.yahoo.ohlcv.load_ohlcv", return_value=bad):
+                with self.assertRaisesRegex(ValueError, "analyst close differs"):
+                    _verify_analyst_prices(Path("/unused"), "SPY", "2026-09-24", {})
+
     def test_cause_chain_omits_exception_messages(self):
         from ta_paper_lab.agents import _safe_cause_chain
 
@@ -29,10 +46,10 @@ class ConnectionDiagnosticsTests(unittest.TestCase):
     def test_key_normalization_and_internal_line_break(self):
         from ta_paper_lab.agents import _normalize_openai_key
 
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "  fake-test-key\\n"}):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "  fake-test-key\n"}):
             _normalize_openai_key()
             self.assertEqual(os.environ["OPENAI_API_KEY"], "fake-test-key")
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "fake\\nother"}):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "fake\nother"}):
             with self.assertRaisesRegex(RuntimeError, "internal line break"):
                 _normalize_openai_key()
 
@@ -59,7 +76,8 @@ class ConnectionDiagnosticsTests(unittest.TestCase):
 class GraphContractTests(unittest.TestCase):
     @patch.dict(os.environ, {"OPENAI_API_KEY": "fake-test-value", "ALPHAVANTAGE_API_KEY": "fake-test-value"})
     @patch("ta_paper_lab.agents.after_close")
-    def test_three_agents_vendor_alias_and_saved_report(self, _clock):
+    @patch("ta_paper_lab.agents._verify_analyst_prices")
+    def test_three_agents_vendor_alias_and_saved_report(self, _verify, _clock):
         class FakeGraph:
             def __init__(self, selected_analysts, config):
                 self.analysts = selected_analysts

@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 from stockstats import wrap
 
 from tradingagents.dataflows.errors import NoMarketDataError, VendorError
+from tradingagents.dataflows.config import get_config
 from tradingagents.dataflows.symbols import normalize_symbol
 from tradingagents.dataflows.vendors.yahoo.ohlcv import (
     _assert_ohlcv_not_stale,
@@ -30,6 +31,19 @@ def get_YFin_data_online(
 
     # Resolve broker/forex symbols to Yahoo's convention (XAUUSD+ -> GC=F).
     canonical = normalize_symbol(symbol)
+    if get_config().get("paper_lab_raw_daily_ohlc") is True:
+        # The lab's market summary and technical indicators must read the same
+        # raw rows, including the requested close, from the same cache.
+        data = load_ohlcv(symbol, end_date, fill_gaps=False)
+        start = pd.Timestamp(start_date)
+        data = data[data["Date"] >= start].set_index("Date")
+        if data.empty:
+            raise NoMarketDataError(symbol, canonical, "no raw rows in requested range")
+        numeric_columns = ["Open", "High", "Low", "Close"]
+        data[numeric_columns] = data[numeric_columns].round(2)
+        label = canonical if canonical == symbol.upper() else f"{canonical} (from {symbol})"
+        return (f"# Stock data for {label} from {start_date} to {end_date}\n"
+                f"# Total records: {len(data)}\n\n" + data.to_csv())
     ticker = yf.Ticker(canonical)
 
     # yfinance treats ``end`` as EXCLUSIVE, so it would drop the requested
@@ -274,7 +288,10 @@ def get_closes(symbol: str, start_date: str, end_date: str) -> pd.Series:
     """Daily closes from ``start_date`` up to, not including, ``end_date``."""
     canonical = normalize_symbol(symbol)
     try:
-        history = yf_retry(lambda: yf.Ticker(canonical).history(start=start_date, end=end_date))
+        history = yf_retry(lambda: yf.Ticker(canonical).history(
+            start=start_date, end=end_date,
+            auto_adjust=get_config().get("paper_lab_raw_daily_ohlc") is not True,
+        ))
     except Exception as e:
         raise NoMarketDataError(symbol, canonical, f"prices unavailable: {e}") from e
     return history["Close"] if "Close" in history else pd.Series(dtype=float)

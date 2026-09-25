@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import copy
 import os
+from decimal import Decimal
 from datetime import datetime, time, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .core import connect, decision_fields, iso_utc, record_decision, status, valid_ticker
+import pandas as pd
+
+from .core import connect, decision_fields, iso_utc, load_bars, money, record_decision, status, valid_ticker
 
 
 def after_close(day: str, now: datetime | None = None) -> None:
@@ -62,6 +65,27 @@ def _normalize_openai_key() -> None:
         os.environ["OPENAI_API_KEY"] = cleaned
 
 
+def _verify_analyst_prices(data_dir: Path, ticker: str, day: str, config: dict) -> None:
+    """Require the vendor's raw analysis-day OHLC to equal the immutable paper bar."""
+    from tradingagents.dataflows.config import run_config
+    from tradingagents.dataflows.vendors.yahoo.ohlcv import load_ohlcv
+
+    stored_day, bars, _ = load_bars(data_dir / "bars" / f"{day}.csv")
+    if stored_day != day or ticker not in bars:
+        raise ValueError(f"{ticker} {day}: completed paper bar missing")
+    with run_config(config):
+        frame = load_ohlcv(ticker, day, fill_gaps=False)
+    today = frame[frame["Date"] == pd.Timestamp(day)]
+    if len(today) != 1:
+        raise ValueError(f"{ticker} {day}: analyst close missing")
+    observed = today.iloc[0]
+    reference = bars[ticker]
+    for field in ("open", "high", "low", "close"):
+        value = Decimal(str(observed[field.title()]))
+        if not value.is_finite() or money(value) != getattr(reference, field):
+            raise ValueError(f"{ticker} {day}: analyst {field} differs from saved paper bar")
+
+
 def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
     """Research only. Imports no Alpaca client and has no submit operation."""
     after_close(day)
@@ -92,6 +116,10 @@ def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
         "data_cache_dir": str(data_dir / "upstream_cache"),
         "memory_log_path": str(data_dir / "memory" / "trading_memory.md"),
         "checkpoint_enabled": False,
+        # The paper bar collector uses raw Yahoo OHLC. Use the same source and
+        # refuse a missing requested close instead of silently using yesterday.
+        "paper_lab_raw_daily_ohlc": True,
+        "paper_lab_require_analysis_day_close": True,
     })
     if os.environ.get("ALPHA_VANTAGE_API_KEY"):
         config["data_vendors"].update({"fundamental_data": "alpha_vantage", "news_data": "alpha_vantage"})
@@ -111,6 +139,7 @@ def analyze(data_dir: Path, symbols: list[str], day: str) -> list[dict]:
                        for p in previous["positions"]],
         )
         try:
+            _verify_analyst_prices(data_dir, ticker, day, config)
             state, signal = graph.propagate(ticker, day, portfolio=context)
             if any(not str(state.get(field) or "").strip()
                    for field in ("market_report", "fundamentals_report", "news_report")):
